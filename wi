@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dijkstra - Caminos mínimos</title>
+<style>
+:root{--ink:#1a2230;--mut:#5b6678;--bg:#eef1f5;--pan:#fff;--ac:#0b5d5b;--ln:#cfd6e0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",system-ui,sans-serif}
+main{max-width:1060px;margin:0 auto;padding:16px}
+h1{font-size:1.35rem;margin:0 0 2px}
+.sub{color:var(--mut);margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--pan);border:1px solid var(--ln);border-radius:8px;padding:10px;margin-bottom:10px}
+.bar label{color:var(--mut)}
+input{width:58px;padding:5px 6px;border:1px solid var(--ln);border-radius:5px;font:inherit}
+button{padding:6px 12px;border:1px solid var(--ac);background:#fff;color:var(--ac);border-radius:5px;font:inherit;cursor:pointer}
+button:hover{background:#e6f1f0}
+button.p{background:var(--ac);color:#fff}
+button:disabled{opacity:.45;cursor:wait}
+button:focus-visible,input:focus-visible{outline:2px solid #e0a100;outline-offset:2px}
+#man{display:none;background:var(--pan);border:1px solid var(--ln);border-radius:8px;padding:10px;margin-bottom:10px}
+#man .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+#mmsg{margin:4px 0;color:var(--mut)}
+#lista{margin:4px 0;font-family:Consolas,monospace;font-size:13px;max-height:110px;overflow:auto;white-space:pre-wrap}
+.main{display:flex;flex-wrap:wrap;gap:10px}
+#cv{flex:1 1 460px;min-width:0;background:#fff;border:1px solid var(--ln);border-radius:8px}
+#cv svg{display:block;width:100%;height:auto}
+#res{flex:0 0 280px;margin:0;background:var(--pan);border:1px solid var(--ln);border-radius:8px;padding:10px;font:13px/1.5 Consolas,monospace;white-space:pre-wrap;min-height:120px}
+.nav{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0}
+#info{background:var(--pan);border:1px solid var(--ln);border-radius:8px;padding:10px;white-space:pre-wrap;min-height:44px}
+.lg{color:var(--mut);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Dijkstra: caminos mínimos</h1>
+<p class="sub" id="est">Cargando Python en el navegador…</p>
+
+<div class="bar">
+  <label>n (7-16): <input id="n" inputmode="numeric"></label>
+  <label>Origen: <input id="o" value="0" inputmode="numeric"></label>
+  <label>Destino: <input id="d" inputmode="numeric"></label>
+  <button id="bA">Grafo aleatorio</button>
+  <button id="bM">Grafo manual</button>
+  <button id="bE" class="p">Ejecutar Dijkstra</button>
+</div>
+
+<div id="man">
+  <div class="row">
+    <label>Origen: <input id="mo"></label><label>Destino: <input id="md"></label><label>Peso: <input id="mp"></label>
+    <button id="mAdd">Agregar arista</button>
+  </div>
+  <div id="mmsg">Los nodos van de 0 a n-1. Cada arista va de un nodo menor a uno mayor. El peso es un entero positivo.</div>
+  <div id="lista"></div>
+  <div class="row">
+    <button id="mQ">Quitar última</button><button id="mB">Borrar todas</button><button id="mX">Cargar ejemplo</button>
+    <button id="mOk" class="p">Aceptar y dibujar grafo</button>
+  </div>
+</div>
+
+<div class="main">
+  <div id="cv"></div>
+  <pre id="res"></pre>
+</div>
+<div class="nav">
+  <button id="nR">« Reiniciar</button><button id="nP">‹ Anterior</button><button id="nS">Siguiente ›</button><button id="nV">Ver caminos mínimos</button>
+</div>
+<div id="info">Genere un grafo para comenzar</div>
+<p class="lg">Colores: nodo actual amarillo · visitados azul · mejora verde · empate naranja · camino mínimo rojo · origen y destino con borde grueso.</p>
+</main>
+
+<script type="text/plain" id="codigo">
+import random, math, json
+
+def generarGrafo(n):
+    grafo = {}
+    for i in range(n):
+        grafo[i] = {}
+    return grafo
+
+def generarAristas(grafo, prob_arista=0.4):
+    n = len(grafo)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if random.random() < prob_arista:
+                peso = random.randint(1, 20)
+                grafo[i][j] = peso
+    return grafo
+
+def inicializarDistancias(grafo, origen):
+    dist = {}
+    for nodo in grafo:
+        dist[nodo] = float('inf')
+    dist[origen] = 0
+    return dist
+
+def nodoNoVisitadoCercano(dist, visitados):
+    mejorNodo = None
+    mejorDistancia = float('inf')
+    for nodo in dist:
+        if nodo not in visitados:
+            if dist[nodo] < mejorDistancia:
+                mejorDistancia = dist[nodo]
+                mejorNodo = nodo
+    return mejorNodo
+
+def dijkstra(grafo, origen):
+    n = len(grafo)
+    dist = inicializarDistancias(grafo, origen)
+    padres = {nodo: [] for nodo in grafo}
+    cuenta = {nodo: 0 for nodo in grafo}
+    cuenta[origen] = 1
+    visitados = set()
+    pasos = []
+    while len(visitados) < n:
+        actual = nodoNoVisitadoCercano(dist, visitados)
+        if actual is None:
+            break
+        visitados.add(actual)
+        paso = {"nodoVisitado": actual, "distancia": dist[actual], "actualizaciones": []}
+        for vecino, peso in grafo[actual].items():
+            nuevaDistancia = dist[actual] + peso
+            if nuevaDistancia < dist[vecino]:
+                dist[vecino] = nuevaDistancia
+                padres[vecino] = [actual]
+                cuenta[vecino] = cuenta[actual]
+                paso["actualizaciones"].append((vecino, "mejora", nuevaDistancia))
+            elif nuevaDistancia == dist[vecino]:
+                padres[vecino].append(actual)
+                cuenta[vecino] += cuenta[actual]
+                paso["actualizaciones"].append((vecino, "empate", nuevaDistancia))
+        pasos.append(paso)
+    return dist, padres, cuenta, pasos
+
+def reconstruirCaminos(padres, origen, destino):
+    if destino == origen:
+        return [[origen]]
+    if not padres[destino]:
+        return []
+    caminos = []
+    for p in padres[destino]:
+        for parcial in reconstruirCaminos(padres, origen, p):
+            caminos.append(parcial + [destino])
+    return caminos
+
+# ---- Estado y funciones de la interfaz (equivalen a la clase App de Tkinter) ----
+ANCHO, ALTO, RADIO = 700, 560, 22
+INF = float("inf")
+
+def ruta(c):
+    return "->".join(str(x) for x in c)
+
+class Estado:
+    grafo = {}; pasos = []; caminos = []; cuenta = {}; dist = {}; pos = {}
+    origen = 0; destino = 0; mostrados = 0; res = -1; manual = {}
+    info = "Genere un grafo para comenzar"
+E = Estado()
+
+def nuevo(grafo):
+    n = len(grafo)
+    E.grafo = grafo; E.pasos = []; E.caminos = []; E.mostrados = 0; E.res = -1
+    r = ALTO / 2 - 60
+    ang = [2 * math.pi * i / n - math.pi / 2 for i in range(n)]
+    E.pos = {i: (ANCHO / 2 + r * math.cos(a), ALTO / 2 + r * math.sin(a)) for i, a in enumerate(ang)}
+    E.info = "Grafo listo. Elija origen/destino y pulse 'Ejecutar Dijkstra'"
+    return n - 1
+
+def aleatorio(n):
+    return nuevo(generarAristas(generarGrafo(n)))
+
+def agregar(n, o, d, p):
+    if not (0 <= o < n and 0 <= d < n): return "Los nodos deben estar entre 0 y %d" % (n - 1)
+    if o >= d: return "El origen debe ser menor que el destino"
+    if p <= 0: return "El peso debe ser un entero positivo"
+    E.manual[(o, d)] = p
+    return ""
+
+def quitar():
+    if E.manual: E.manual.popitem()
+
+def borrar():
+    E.manual = {}
+
+def ejemplo():
+    E.manual = {(0,1):2, (0,2):2, (1,3):3, (2,3):3, (1,4):5, (3,5):2, (4,5):1, (5,6):4}
+
+def lista():
+    return "\n".join("%d -> %d (peso %d)" % (o, d, p) for (o, d), p in E.manual.items())
+
+def hayOrigenCero():
+    return any(o == 0 for (o, d) in E.manual)
+
+def aceptar(n):
+    g = generarGrafo(n)
+    for (o, d), p in E.manual.items():
+        g[o][d] = p
+    return nuevo(g)
+
+def ejecutar(o, d):
+    n = len(E.grafo)
+    if not E.grafo: return "Primero genere un grafo"
+    if not (0 <= o < n and 0 <= d < n): return "Origen y destino deben estar entre 0 y %d" % (n - 1)
+    if not E.grafo[o] and o != d:
+        return "Ninguna arista sale del nodo %d. Elija otro origen o agregue aristas que salgan de él." % o
+    E.origen, E.destino = o, d
+    E.dist, padres, E.cuenta, E.pasos = dijkstra(E.grafo, o)
+    E.caminos = reconstruirCaminos(padres, o, d)
+    E.mostrados = 0; E.res = -1
+    E.info = "Dijkstra ejecutado. Use 'Siguiente' para avanzar paso a paso"
+    if E.dist[d] == INF:
+        extra = " Las flechas solo van de un nodo menor a uno mayor, así que el origen debe ser menor que el destino." if o > d else ""
+        return "No existe un camino del nodo %d al nodo %d.%s Use 'Siguiente' para ver qué nodos sí se alcanzan." % (o, d, extra)
+    return ""
+
+def mover(c):
+    if E.pasos:
+        E.res = -1
+        E.mostrados = max(0, min(len(E.pasos), E.mostrados + c))
+
+def reiniciar():
+    E.mostrados = 0; E.res = -1
+
+def ver():
+    if E.pasos:
+        E.mostrados = len(E.pasos)
+        if E.caminos:
+            E.res = (E.res + 1) % len(E.caminos)
+
+def render():
+    g = E.grafo
+    if not g:
+        return json.dumps({"vacio": True, "info": E.info, "res": "Ejecute Dijkstra para ver aquí los caminos mínimos."})
+    dist = {k: INF for k in g}
+    vis = []
+    if E.pasos:
+        dist[E.origen] = 0
+        for p in E.pasos[:E.mostrados]:
+            vis.append(p["nodoVisitado"])
+            for v, t, d in p["actualizaciones"]:
+                dist[v] = d
+    paso = E.pasos[E.mostrados - 1] if E.pasos and E.mostrados > 0 else None
+    cam = E.caminos[E.res] if E.res != -1 else []
+    ac = set(zip(cam, cam[1:]))
+    act = {(paso["nodoVisitado"], v): t for v, t, d in paso["actualizaciones"]} if paso else {}
+    aristas = []
+    for a in g:
+        for b, w in g[a].items():
+            if E.res != -1:
+                c, gr = ("red", 4) if (a, b) in ac else ("#999999", 1)
+            elif (a, b) in act:
+                c, gr = ("green", 3) if act[(a, b)] == "mejora" else ("orange", 3)
+            else:
+                c, gr = "#999999", 1
+            aristas.append([E.pos[a][0], E.pos[a][1], E.pos[b][0], E.pos[b][1], w, c, gr])
+    nodos = []
+    for k, (x, y) in E.pos.items():
+        if k in cam: f = "#ff9999"
+        elif paso and k == paso["nodoVisitado"]: f = "#ffe066"
+        elif k in vis: f = "#a8d0ff"
+        else: f = "#f0f0f0"
+        borde = 4 if E.pasos and k in (E.origen, E.destino) else 1
+        t = "" if not E.pasos else ("inf" if dist[k] == INF else "d=%s" % dist[k])
+        nodos.append([x, y, k, f, borde, t])
+    info = E.info
+    if E.pasos:
+        tot = len(E.pasos)
+        if E.res != -1:
+            info = "Camino minimo %d de %d: %s\nCantidad de caminos minimos: %d" % (E.res + 1, len(E.caminos), ruta(cam), E.cuenta[E.destino])
+        elif E.mostrados == 0:
+            info = "Inicio: distancia de %d = 0, el resto = inf" % E.origen
+        else:
+            u = "Sin actualizaciones"
+            if paso["actualizaciones"]:
+                u = "Actualizaciones: " + "; ".join("nodo %d (%s, d=%d)" % (v, t, d) for v, t, d in paso["actualizaciones"])
+            info = "Paso %d/%d: se visita el nodo %d (d=%d). %s" % (E.mostrados, tot, paso["nodoVisitado"], paso["distancia"], u)
+            if E.mostrados == tot:
+                if E.dist[E.destino] == INF:
+                    info += "\nNo existe un camino entre %d y %d" % (E.origen, E.destino)
+                else:
+                    info += "\nTerminado. Pulse 'Ver caminos minimos' para resaltarlos"
+    if not E.pasos:
+        res = "Ejecute Dijkstra para ver aquí los caminos mínimos."
+    else:
+        res = "RESUMEN\nOrigen: %d\nDestino: %d\n" % (E.origen, E.destino)
+        if E.dist[E.destino] == INF:
+            res += "\nNo existe un camino entre estos nodos"
+        else:
+            res += "Distancia minima: %s\nCantidad de caminos minimos: %d\nCAMINOS MINIMOS\n" % (E.dist[E.destino], E.cuenta[E.destino])
+            for i, c in enumerate(E.caminos):
+                res += ("> " if i == E.res else "  ") + "%d) %s\n" % (i + 1, ruta(c))
+            res += "\n(Use 'Ver caminos minimos' para resaltarlos en el grafo)"
+    return json.dumps({"aristas": aristas, "nodos": nodos, "info": info, "res": res})
+</script>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const R = 22;
+let P, nMan = 8;
+const py = (f, ...a) => P.get(f)(...a);
+
+function dibujar() {
+  const s = JSON.parse(py('render'));
+  $('info').textContent = s.info;
+  $('res').textContent = s.res;
+  if (s.vacio) { $('cv').innerHTML = ''; return; }
+  let h = '<svg viewBox="0 0 700 560" role="img" aria-label="Grafo">';
+  for (const [x1, y1, x2, y2, w, c, g] of s.aristas) {
+    const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+    const ax = x1 + ux * R, ay = y1 + uy * R, bx = x2 - ux * R, by = y2 - uy * R;
+    const hx = bx - ux * 11, hy = by - uy * 11;
+    h += `<line x1="${ax}" y1="${ay}" x2="${hx}" y2="${hy}" stroke="${c}" stroke-width="${g}"/>`;
+    h += `<polygon points="${bx},${by} ${hx - uy * 5},${hy + ux * 5} ${hx + uy * 5},${hy - ux * 5}" fill="${c}"/>`;
+    h += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 4}" text-anchor="middle" font-size="13" font-weight="700" fill="#1a2230" stroke="#fff" stroke-width="3" paint-order="stroke">${w}</text>`;
+  }
+  for (const [x, y, k, f, b, t] of s.nodos) {
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="${f}" stroke="#000" stroke-width="${b}"/>`;
+    h += `<text x="${x}" y="${y + 5}" text-anchor="middle" font-size="15" font-weight="700" fill="#000">${k}</text>`;
+    if (t) h += `<text x="${x}" y="${y + R + 14}" text-anchor="middle" font-size="12" fill="#1a2230">${t}</text>`;
+  }
+  $('cv').innerHTML = h + '</svg>';
+}
+
+function leerN() {
+  let n = parseInt($('n').value);
+  if (isNaN(n)) n = 8;
+  else if (n < 7 || n > 16) { alert('n fuera de rango. Se usará n = 8'); n = 8; }
+  $('n').value = n;
+  return n;
+}
+function msgM(t, ok) { $('mmsg').textContent = t; $('mmsg').style.color = ok ? '#1b7a3a' : '#b3261e'; }
+function listaM() { $('lista').textContent = py('lista'); }
+function nuevoGrafo(dest) { $('d').value = dest; dibujar(); }
+
+function iniciar() {
+  $('bA').onclick = () => nuevoGrafo(py('aleatorio', leerN()));
+  $('bM').onclick = () => { nMan = leerN(); py('borrar'); listaM(); $('man').style.display = 'block'; msgM('Los nodos van de 0 a ' + (nMan - 1) + '. Cada arista va de un nodo menor a uno mayor. El peso es un entero positivo.', true); };
+  $('mAdd').onclick = () => {
+    const v = ['mo', 'md', 'mp'].map(i => parseInt($(i).value));
+    if (v.some(isNaN)) return msgM('Escriba 3 números enteros: origen, destino y peso', false);
+    const e = py('agregar', nMan, ...v);
+    if (e) return msgM(e, false);
+    listaM(); msgM(`Arista ${v[0]} -> ${v[1]} guardada (peso ${v[2]})`, true);
+    ['mo', 'md', 'mp'].forEach(i => $(i).value = '');
+  };
+  $('mp').onkeydown = e => { if (e.key === 'Enter') $('mAdd').click(); };
+  $('mQ').onclick = () => { py('quitar'); listaM(); msgM('Última arista quitada', true); };
+  $('mB').onclick = () => { py('borrar'); listaM(); msgM('Se borraron todas las aristas', true); };
+  $('mX').onclick = () => { py('ejemplo'); listaM(); msgM('Ejemplo cargado. Pruebe origen 0 y destino 6: 2 caminos mínimos (distancia 11).', true); };
+  $('mOk').onclick = () => {
+    if (!py('lista')) return msgM('Agregue al menos una arista', false);
+    if (!py('hayOrigenCero') && !confirm('Ninguna arista sale del nodo 0, el origen por defecto. Tendrá que elegir otro origen. ¿Continuar?')) return;
+    $('man').style.display = 'none';
+    nuevoGrafo(py('aceptar', nMan));
+  };
+  $('bE').onclick = () => {
+    const o = parseInt($('o').value), d = parseInt($('d').value);
+    if (isNaN(o) || isNaN(d)) return alert('Origen y destino deben ser números');
+    const m = py('ejecutar', o, d);
+    dibujar();
+    if (m) alert(m);
+  };
+  $('nS').onclick = () => { py('mover', 1); dibujar(); };
+  $('nP').onclick = () => { py('mover', -1); dibujar(); };
+  $('nR').onclick = () => { py('reiniciar'); dibujar(); };
+  $('nV').onclick = () => { py('ver'); dibujar(); };
+  dibujar();
+}
+
+(async () => {
+  document.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const pyodide = await loadPyodide();
+    pyodide.runPython($('codigo').textContent);
+    P = pyodide.globals;
+    iniciar();
+    document.querySelectorAll('button').forEach(b => b.disabled = false);
+    $('est').textContent = 'Programa en Python (Pyodide) ejecutándose en tu navegador. Genere un grafo para comenzar.';
+  } catch (e) {
+    $('est').textContent = 'No se pudo cargar Python. Revise su conexión a internet y recargue la página.';
+  }
+})();
+</script>
+</body>
+</html>
